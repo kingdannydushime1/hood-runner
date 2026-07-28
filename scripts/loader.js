@@ -44,18 +44,34 @@ const deathSprites = [];
 for (let i = 1; i < 5; i += 1) {
 	deathSprites.push(loader.addImage('assets/sprites/death/' + i + '.png'));
 }
-const barriersSprites = [];
-for (let i = 1; i < 8; i += 1) {
-	barriersSprites.push(loader.addImage('assets/sprites/barriers/' + i + '.png'));
+
+var allBg = [];
+var allFg = [];
+var allBarriers = [];
+
+for (var b = 0; b < TOTAL_ENVIRONMENTS; b += 1) {
+  var biomeDir = ENVIRONMENTS[b].dir;
+  var bgArr = [];
+  for (var i = 1; i <= 8; i += 1) {
+    bgArr.push(loader.addImage('assets/bg/' + biomeDir + '/' + i + '.png'));
+  }
+  allBg.push(bgArr);
+  var fgArr = [];
+  for (var i = 1; i <= 2; i += 1) {
+    fgArr.push(loader.addImage('assets/fg/' + biomeDir + '/' + i + '.png'));
+  }
+  allFg.push(fgArr);
+  var barArr = [];
+  var count = ENVIRONMENTS[b].obstacleCount;
+  for (var i = 1; i <= count; i += 1) {
+    barArr.push(loader.addImage('assets/sprites/barriers/' + biomeDir + '/' + i + '.png'));
+  }
+  allBarriers.push(barArr);
 }
-const bgSprites = [];
-for (let i = 1; i < 9; i += 1) {
-	bgSprites.push(loader.addImage('assets/bg/' + i + '.png'));
-}
-const fgSprites = [];
-for (let i = 1; i < 3; i += 1) {
-	fgSprites.push(loader.addImage('assets/fg/' + i + '.png'));
-}
+
+var barriersSprites = allBarriers[0];
+var bgSprites = allBg[0];
+var fgSprites = allFg[0];
 const CollectSprites  = [];
 CollectSprites.push(loader.addImage('assets/sprites/collect/shield.png'));
 CollectSprites.push(loader.addImage('assets/sprites/collect/shieldIcon.png'));
@@ -64,12 +80,17 @@ CollectSprites.push(loader.addImage('assets/sprites/collect/coin.png'))
 
 var audioArr = []
 
-var bgMusic = new Howl({
-  src: ['assets/audio/bgMusic.mp3'],
-  loop: true,
-  volume: 0.05
-});
-audioArr.push(bgMusic)
+var biomeMusic = [];
+for (var b = 0; b < TOTAL_ENVIRONMENTS; b += 1) {
+  var m = new Howl({
+    src: ['assets/audio/' + ENVIRONMENTS[b].dir + '.mp3'],
+    loop: true,
+    volume: 0.05
+  });
+  biomeMusic.push(m);
+  audioArr.push(m);
+}
+var bgMusic = biomeMusic[0];
 
 var clickSound = new Howl({
   src: ['assets/audio/click.mp3'],
@@ -125,7 +146,7 @@ loader.addCompletionListener(() => {
     }    toggleHide(mainMenuBlock)
     toggleHide(loaderBlock)
     toggleHide(controlBlock)
-    bgRatio = bgSprites[0].naturalWidth / bgSprites[0].naturalHeight;
+    bgRatio = allBg[0][0].naturalWidth / allBg[0][0].naturalHeight;
     gameInit()
   }) 
 })

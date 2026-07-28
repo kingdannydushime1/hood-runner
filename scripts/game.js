@@ -159,9 +159,9 @@ var playerHeight = (canvas.height / 5) * (player.image.naturalWidth / player.ima
             if (object.isCoin) {
               if(!object.kicked){
                 coins += 1;
+                levelCoins += 1;
               }
               object.kicked = true;
-              console.log(coins)
               
             }
             if (!object.isBooster && !object.isShield && !object.isCoin)
@@ -175,6 +175,10 @@ var playerHeight = (canvas.height / 5) * (player.image.naturalWidth / player.ima
 }
 
 
+
+var levelCoins = 0;
+var levelCooldownActive = false;
+var currentBiomeIdx = -1;
 
 var player = new GameObject(runSprites[0], 0.2 * canvas.width, canvas.height - (wrapperBlock.offsetHeight / 2.5), true)
 
@@ -434,6 +438,7 @@ function Upgrade(boost){
 
 function PlayButtonActivate() {
   ResetGlobalVariables()
+  applyBiome(getCurrentLevel())
   
   document.addEventListener("keydown", keyRightHandler, false);
   document.addEventListener("keyup", keyLeftHandler, false);
@@ -459,6 +464,8 @@ function PauseToggle() {
 function ResetGlobalVariables() {
   objects = [];
   coins = 0;
+  levelCoins = 0;
+  levelCooldownActive = false;
   player.x = 0.2 * canvas.width;
   gameOver = false;
   pause = false;
@@ -579,8 +586,37 @@ function UpdateBg(index, arr = bg) {
 
 function showScoreAndCoins() {
   score += 0.12
-  scoreBlock.innerText = '0'.repeat(4 - String(score.toFixed(0).length)) + String(score.toFixed(0));
-  coinsText.innerText = '0'.repeat(3 - String(coins).length) + coins
+  var level = getCurrentLevel();
+  var target = getLevelTarget(level);
+  scoreBlock.innerText = 'LEVEL ' + level;
+  coinsText.innerText = levelCoins + '/' + target
+}
+
+function applyBiome(level) {
+  var biome = getBiome(level);
+  var idx = biome.id;
+  if (idx === currentBiomeIdx) return;
+  currentBiomeIdx = idx;
+
+  var prevPlaying = bgMusic && !bgMusic.playing();
+  if (bgMusic) bgMusic.stop();
+  bgSprites = allBg[idx];
+  fgSprites = allFg[idx];
+  barriersSprites = allBarriers[idx];
+  bgMusic = biomeMusic[idx];
+  if (prevPlaying) bgMusic.play();
+
+  var bgLayerOrder = [0,0,1,1,2,2,3,3,7,7,4,4,5,5,6,6];
+  for (var i = 0; i < bg.length; i++) {
+    bg[i].image = bgSprites[bgLayerOrder[i]];
+    if (i % 2 === 0) bg[i].x = 0;
+    else bg[i].x = canvas.height * bgRatio;
+  }
+  for (var i = 0; i < fg.length; i++) {
+    fg[i].image = fgSprites[i < 2 ? 0 : 1];
+    if (i % 2 === 0) fg[i].x = 0;
+    else fg[i].x = canvas.height * bgRatio;
+  }
 }
 
 function Start() {
@@ -633,7 +669,8 @@ function Update() {
     if (RandomInteger(0, speed * 1.1) > speed) {
       if (objects.length == 0 || objects.at(-1).x < canvas.width - 100) {
         objects.push(new GameObject(barriersSprites[0], 4 * canvas.width / 3.1, canvas.height - (wrapperBlock.offsetHeight / 2.7), false));
-        var randomBarrier = RandomInteger(1, 8)
+        var biomeObstacleCount = getBiomeObstacleCount(getCurrentLevel());
+        var randomBarrier = RandomInteger(1, biomeObstacleCount)
         switch (randomBarrier) {
           case 1:
             objects.at(-1).image = barriersSprites[randomBarrier - 1]
@@ -684,8 +721,15 @@ function Update() {
                 objects.at(-1).sizeCoef = 0.5;
                 objects.at(-1).y = (RandomInteger(0, 1) == 1) ? canvas.height - (wrapperBlock.offsetHeight / 2.5) : canvas.height - (wrapperBlock.offsetHeight / 1.3)
               }
-              break;
             }
+            break;
+          case 9:
+            objects.at(-1).image = barriersSprites[randomBarrier - 1]
+            objects.at(-1).isLevitate = true
+            objects.at(-1).sizeCoef = 1.3;
+            objects.at(-1).y = canvas.height - (wrapperBlock.offsetHeight / 1.5)
+            pushRandomCoin('top')
+            break;
         }
       }
     }
@@ -730,6 +774,9 @@ function Update() {
       GameOver()
     }
 
+    if (!gameOver && !player.dead && levelCoins >= getLevelTarget(getCurrentLevel()) && !levelCooldownActive) {
+      LevelComplete();
+    }
 
     speed += 0.001
 
@@ -740,23 +787,28 @@ function Update() {
 }
 
 
+function drawImageSafe(img, sx, sy, sw, sh, dx, dy, dw, dh) {
+  if (img.complete && img.naturalWidth > 0) {
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  } else {
+    img.addEventListener("load", function() {
+      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    }, {once: true});
+  }
+}
+
 function Draw() {
   ctx.imageSmoothingQuality = 'high'
   ctx.imageSmoothingEnabled = true
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (var i = 0; i < bg.length; i += 1) {
-    bg[i].image.addEventListener("load",
-      ctx.drawImage(
-        bg[i].image,
-        0,
-        0,
-        bg[i].image.naturalWidth,
-        bg[i].image.naturalHeight,
-        bg[i].x,
-        bg[i].y,
-        canvas.height * bgRatio,
-        canvas.height
-      ));
+    drawImageSafe(
+      bg[i].image,
+      0, 0,
+      bg[i].image.naturalWidth, bg[i].image.naturalHeight,
+      bg[i].x, bg[i].y,
+      canvas.height * bgRatio, canvas.height
+    );
   }
 
   for (var i = 0; i < objects.length; i++) {
@@ -777,18 +829,13 @@ function Draw() {
     }
   }
   for (var i = 0; i < (player.boost ? fg.length : fg.length - 2); i += 1) {
-    fg[i].image.addEventListener("load",
-      ctx.drawImage(
-        fg[i].image,
-        0,
-        0,
-        fg[i].image.naturalWidth,
-        fg[i].image.naturalHeight,
-        fg[i].x,
-        fg[i].y,
-        canvas.height * bgRatio,
-        canvas.height
-      ));
+    drawImageSafe(
+      fg[i].image,
+      0, 0,
+      fg[i].image.naturalWidth, fg[i].image.naturalHeight,
+      fg[i].x, fg[i].y,
+      canvas.height * bgRatio, canvas.height
+    );
   }
 
 
@@ -986,15 +1033,21 @@ function DrawObject(object) {
   var playerHeight = (canvas.height / 5) * (player.image.naturalWidth / player.image.naturalHeight);
   var barrierWidth = (canvas.height / 3.5)
   var barrierHight = (canvas.height / 3.5) / (object.image.naturalWidth / object.image.naturalHeight)
-  object.image.addEventListener("load",
+  var img = object.image;
+  if (img.complete && img.naturalWidth > 0) {
     ctx.drawImage
       (
-        object.image,
+        img,
         object.x,
         object.isPlayer ? object.y - jumpHeight : object.y,
         object.isPlayer ? playerWidth : barrierWidth * object.sizeCoef,
         object.isPlayer ? playerHeight : barrierHight * object.sizeCoef,
-      ))
+      );
+  } else {
+    img.addEventListener("load", function() {
+      ctx.drawImage(img, object.x, object.isPlayer ? object.y - jumpHeight : object.y, object.isPlayer ? playerWidth : barrierWidth * object.sizeCoef, object.isPlayer ? playerHeight : barrierHight * object.sizeCoef);
+    }, {once: true});
+  }
 }
 
 
@@ -1003,6 +1056,147 @@ function Resize() {
   canvas.height = wrapperBlock.offsetHeight
 }
 
+
+function playLevelCompleteSound() {
+  var notes = [523.25, 659.25, 783.99, 1046.50];
+  for (var i = 0; i < notes.length; i += 1) {
+    (function(idx) {
+      setTimeout(function() {
+        try {
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.frequency.setValueAtTime(notes[idx], audioCtx.currentTime);
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.35);
+        } catch(e) {}
+      }, idx * 100);
+    })(i);
+  }
+}
+
+function playDingSound(starNum) {
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    var freq = 523.25 + starNum * 130.81;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.6);
+  } catch(e) {}
+}
+
+var lcOverlay = document.querySelector('.levelComplete');
+var lcNumberEl = document.getElementById('lcNumber');
+var lcStarsEls = document.querySelectorAll('.lc-star-box');
+var lcCoinsNumEl = document.getElementById('lcCoinsNum');
+var lcNextTextEl = document.getElementById('lcNextText');
+
+function LevelComplete() {
+  levelCooldownActive = true;
+  stopGame = true;
+  coinSound.play();
+  playLevelCompleteSound();
+
+  bgMusic.pause();
+  bgMusic.currentTime = 0;
+  document.removeEventListener("keydown", keyRightHandler, false);
+  document.removeEventListener("keyup", keyLeftHandler, false);
+
+  var level = getCurrentLevel();
+  var target = getLevelTarget(level);
+
+  var bonus = Math.floor(target * 1.5);
+  localStorage.setItem('myCoins', Number(localStorage.getItem('myCoins')) + Number(coins) + bonus);
+  mainCoinBlock.innerText = localStorage.getItem('myCoins');
+
+  var stars = completeLevel(level, levelCoins);
+
+  lcNumberEl.innerText = level;
+  for (var i = 0; i < lcStarsEls.length; i += 1) {
+    lcStarsEls[i].classList.remove('show');
+  }
+  lcCoinsNumEl.innerText = '0';
+  lcNextTextEl.innerText = 'NEXT LEVEL...';
+  toggleHide(lcOverlay);
+
+  setTimeout(function() {
+    if (stars >= 1) {
+      lcStarsEls[0].classList.add('show');
+      playDingSound(1);
+    }
+    setTimeout(function() {
+      if (stars >= 2) {
+        lcStarsEls[1].classList.add('show');
+        playDingSound(2);
+      }
+      setTimeout(function() {
+        if (stars >= 3) {
+          lcStarsEls[2].classList.add('show');
+          playDingSound(3);
+        }
+        var countStart = Date.now();
+        var countDuration = 800;
+        var countInterval = setInterval(function() {
+          var elapsed = Date.now() - countStart;
+          var progress = Math.min(elapsed / countDuration, 1);
+          var eased = 1 - Math.pow(1 - progress, 3);
+          var currentNum = Math.floor(eased * levelCoins);
+          lcCoinsNumEl.innerText = currentNum;
+          if (progress >= 1) {
+            clearInterval(countInterval);
+            lcCoinsNumEl.innerText = levelCoins;
+          }
+        }, 30);
+      }, 400);
+    }, 400);
+  }, 600);
+
+  if (level >= TOTAL_LEVELS) {
+    lcNextTextEl.innerText = 'YOU WIN!';
+    setTimeout(function() {
+      toggleHide(lcOverlay);
+      levelProgress.current = 1;
+      levelProgress.completed = {};
+      saveProgress();
+      toggleHide(mainMenuBlock);
+      toggleHide(pauseButton);
+      toggleHide(scoreBlock);
+      toggleHide(coinsBlock);
+      highScoreBlock.innerText = highScore;
+      mainCoinBlock.innerText = localStorage.getItem('myCoins');
+      updateAchives();
+      updateUpgrades();
+      levelCooldownActive = false;
+    }, 4000);
+  } else {
+    setTimeout(function() {
+      startNextLevel();
+    }, 3200);
+  }
+}
+
+function startNextLevel() {
+  var next = getCurrentLevel() + 1;
+  setCurrentLevel(next);
+  applyBiome(next);
+  toggleHide(lcOverlay);
+  document.addEventListener("keydown", keyRightHandler, false);
+  document.addEventListener("keyup", keyLeftHandler, false);
+  ResetGlobalVariables();
+  levelCooldownActive = false;
+  bgMusic.play();
+  Start();
+}
 
 function RandomInteger(min, max) {
   let rand = min - 0.5 + Math.random() * (max - min + 1);
