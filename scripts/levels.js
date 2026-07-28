@@ -34,7 +34,6 @@ function getCurrentLevel() {
 }
 
 function getBiomeIndex(level) {
-  if (level === 11) return 1;
   return (level - 1) % TOTAL_ENVIRONMENTS;
 }
 

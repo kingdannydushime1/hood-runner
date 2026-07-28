@@ -606,6 +606,11 @@ function applyBiome(level) {
   bgMusic = biomeMusic[idx];
   if (prevPlaying) bgMusic.play();
 
+  var img0 = bgSprites[0];
+  if (img0.complete && img0.naturalWidth > 0) {
+    bgRatio = img0.naturalWidth / img0.naturalHeight;
+  }
+
   var bgLayerOrder = [0,0,1,1,2,2,3,3,7,7,4,4,5,5,6,6];
   for (var i = 0; i < bg.length; i++) {
     bg[i].image = bgSprites[bgLayerOrder[i]];
@@ -787,12 +792,12 @@ function Update() {
 }
 
 
-function drawImageSafe(img, sx, sy, sw, sh, dx, dy, dw, dh) {
+function drawImageSafe(img, dx, dy, dw, dh) {
   if (img.complete && img.naturalWidth > 0) {
-    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, dx, dy, dw, dh);
   } else {
     img.addEventListener("load", function() {
-      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, dx, dy, dw, dh);
     }, {once: true});
   }
 }
@@ -802,13 +807,7 @@ function Draw() {
   ctx.imageSmoothingEnabled = true
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (var i = 0; i < bg.length; i += 1) {
-    drawImageSafe(
-      bg[i].image,
-      0, 0,
-      bg[i].image.naturalWidth, bg[i].image.naturalHeight,
-      bg[i].x, bg[i].y,
-      canvas.height * bgRatio, canvas.height
-    );
+    drawImageSafe(bg[i].image, bg[i].x, bg[i].y, canvas.height * bgRatio, canvas.height);
   }
 
   for (var i = 0; i < objects.length; i++) {
@@ -829,13 +828,7 @@ function Draw() {
     }
   }
   for (var i = 0; i < (player.boost ? fg.length : fg.length - 2); i += 1) {
-    drawImageSafe(
-      fg[i].image,
-      0, 0,
-      fg[i].image.naturalWidth, fg[i].image.naturalHeight,
-      fg[i].x, fg[i].y,
-      canvas.height * bgRatio, canvas.height
-    );
+    drawImageSafe(fg[i].image, fg[i].x, fg[i].y, canvas.height * bgRatio, canvas.height);
   }
 
 
