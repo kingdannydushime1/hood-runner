@@ -600,9 +600,28 @@ function applyBiome(level) {
 
   var prevPlaying = bgMusic && !bgMusic.playing();
   if (bgMusic) bgMusic.stop();
+  bgSprites = allBg[idx];
+  fgSprites = allFg[idx];
   barriersSprites = allBarriers[idx];
   bgMusic = biomeMusic[idx];
   if (prevPlaying) bgMusic.play();
+
+  var img0 = bgSprites[0];
+  if (img0.complete && img0.naturalWidth > 0) {
+    bgRatio = img0.naturalWidth / img0.naturalHeight;
+  }
+
+  var bgLayerOrder = [0,0,1,1,2,2,3,3,7,7,4,4,5,5,6,6];
+  for (var i = 0; i < bg.length; i++) {
+    bg[i].image = bgSprites[bgLayerOrder[i]];
+    if (i % 2 === 0) bg[i].x = 0;
+    else bg[i].x = canvas.height * bgRatio;
+  }
+  for (var i = 0; i < fg.length; i++) {
+    fg[i].image = fgSprites[i < 2 ? 0 : 1];
+    if (i % 2 === 0) fg[i].x = 0;
+    else fg[i].x = canvas.height * bgRatio;
+  }
 }
 
 function Start() {
